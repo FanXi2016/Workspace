@@ -1,0 +1,986 @@
+#!/bin/sh
+
+
+get_device_routing_object()
+{
+	local nl="$1"
+	case "$action" in
+		get_name)
+		[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.Layer3Forwarding." "" "0"
+		;;
+	esac
+}
+
+get_device_routing_num_and_uci_iface() {
+	local parm="$1"
+	local parm_check="$2"
+	easycwmp_parse_formated_parameter "$parm" "$parm_check" "rc" "__num"
+	[ "$rc" != "0" ] && return
+	local __uci_iface=`$UCI_SHOW network | grep "^network\.@route\[[0-9]\+\].instance=$__num$" | head -1 | cut -d'.' -f2`
+	eval "export -- \"$3=\"\"$__num\"\"\""
+	eval "export -- \"$4=\"\"$__uci_iface\"\"\""
+}
+
+get_device_routing_default_connection_service()
+{
+	local nl="$1"
+	local val=""
+	local param="InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService"
+	local permissions="0"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET easycwmp.@device_routing[0].DefaultConnectionService 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$param"
+		;;
+	esac
+	easycwmp_output "$param" "$val" "$permissions"
+}
+
+apply_network_route_changes()
+{
+	$UCI_COMMIT network
+	ubus call network reload > /dev/null 2>&1
+}
+
+set_device_routing_default_connection_service()
+{
+	local val=$1
+	local parm="InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService"
+	local len=${#val}
+
+	case "$action" in
+		set_value)
+		[ $len -gt 256 ] && return $E_INVALID_PARAMETER_VALUE
+		$UCI_SET easycwmp.@device_routing[0].DefaultConnectionService="$val"
+		easycwmp_config_load
+		;;
+		set_notification)
+		set_notification_common_argument "$parm" "$val"
+ 			return $?
+		;;
+	esac
+	return 0
+}
+
+get_device_routing_forward_number_of_entries()
+{
+	local nl="$1"
+	local val=""
+	local param="InternetGatewayDevice.Layer3Forwarding.ForwardNumberOfEntries"
+	local permissions="0"
+	case "$action" in
+		get_value)
+		val=`/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} show network 2> /dev/null | grep '=route$' | wc -l`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$param"
+		;;
+	esac
+	easycwmp_output "$param" "$val" "$permissions"
+}
+
+get_device_routing_forwarding_object()
+{
+	local nl="$1"
+	case "$action" in
+		get_name)
+		[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.Layer3Forwarding.Forwarding." "" "0"
+		;;
+	esac
+}
+
+get_device_routing_forwarding_instances()
+{
+	local nl="$1"
+	[ "$action" != "get_name" -o "$nl" = "1" ] && return
+	local num
+	local instances=`/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} show network 2> /dev/null | grep '=route$' | wc -l`
+	for num in $instances; do
+		easycwmp_output "InternetGatewayDevice.Layer3Forwarding.Forwarding.$num." "" "0"
+	done
+}
+
+get_forwarding_instance_enable()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Enable"
+	local iface="$2"
+	local nl="$3"
+	local type="xsd:boolean"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.enabled 2> /dev/null`
+		if [ "$val" = "1" ];then
+			val="true"
+		elif [ "$val" = "0" ];then
+			val="false"
+		else
+			return $E_INVALID_ARGUMENTS
+		fi
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+	return 0
+}
+
+set_forwarding_instance_enable()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Enable"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			#execute_command_in_apply_service "wifi"
+			if [ "$val" = "true" ];then
+				val="1"
+			elif [ "$val" = "false" ];then
+				val="0"
+			else
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+			$UCI_SET network.$uci_iface.enabled="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_status()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Status"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="0"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.enabled 2> /dev/null`
+		[ "$val" = "1" ] && val="Enabled" || val="Disabled"
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+get_forwarding_instance_type()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Type"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.type 2> /dev/null`
+		case "$val" in
+			0)
+			val="Default"
+			;;
+			1)
+			val="Network"
+			;;
+			2)
+			val="Host"
+			;;
+			*)
+			return $E_INVALID_ARGUMENTS
+			;;
+		esac
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_type()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Type"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			case "$val" in
+				Default|default)
+				val="0"
+				;;
+				Network|network)
+				val="1"
+				;;
+				Host|host)
+				val="2"
+				;;
+				*)
+				return $E_INVALID_PARAMETER_VALUE
+				;;
+			esac
+			$UCI_SET network.$uci_iface.type="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_dest_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.DestIPAddress"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.target 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_dest_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.DestIPAddress"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			easycwmp_check_IPv4_address $val
+			local ret=$?
+			if [ $ret != "0" ]; then
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+			$UCI_SET network.$uci_iface.target="$val"
+			apply_network_route_changes
+			;;
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_dest_subnet_mask()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.DestSubnetMask"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.netmask 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_dest_subnet_mask()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.DestSubnetMask"
+	local uci_iface="$2"
+	local val="$3"
+
+	case $action in
+		set_value)
+			easycwmp_check_IPv4_address $val
+			local ret=$?
+			if [ $ret != "0" ]; then
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+
+			check_IPv4_subnetmask "$val"
+			[ $? -ne 0 ] && return $E_INVALID_PARAMETER_VALUE
+			$UCI_SET network.$uci_iface.netmask="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+
+get_forwarding_instance_source_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.SourceIPAddress"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.srcaddr 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_source_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.SourceIPAddress"
+	local uci_iface="$2"
+	local val="$3"
+
+	case $action in
+		set_value)
+			easycwmp_check_IPv4_address $val
+			local ret=$?
+			if [ $ret != "0" ]; then
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+
+			$UCI_SET network.$uci_iface.srcaddr="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_source_subnet_mask()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.SourceSubnetMask"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.srcmask 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_source_subnet_mask()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.SourceSubnetMask"
+	local uci_iface="$2"
+	local val="$3"
+
+	case $action in
+		set_value)
+			easycwmp_check_IPv4_address $val
+			local ret=$?
+			if [ $ret != "0" ]; then
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+
+			check_IPv4_subnetmask "$val"
+			[ $? -ne 0 ] && return $E_INVALID_PARAMETER_VALUE
+
+			$UCI_SET network.$uci_iface.srcmask="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_gateway_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.GatewayIPAddress"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.gateway 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_gateway_ipaddr()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.GatewayIPAddress"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			easycwmp_check_IPv4_address $val
+			local ret=$?
+			if [ $ret != "0" ]; then
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+
+			if [ "$val" != "0.0.0.0" ];then
+				local max=`echo $val |awk -F "." '{print $4}'`
+				[ $max -eq 0 -o $max -eq 255 ] && return $E_INVALID_PARAMETER_VALUE
+
+				local submask=`$UCI_GET network.lan.netmask  2> /dev/null`
+				local hostaddr=`$UCI_GET network.lan.ipaddr 2> /dev/null`
+				get_IPv4_network_num $val $submask net_addr_val
+				get_IPv4_network_num $hostaddr $submask net_addr_host
+				if [ "$net_addr_val" != "$net_addr_host" ];then
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			fi
+
+			$UCI_SET network.$uci_iface.gateway="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_interface()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Interface"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.interface 2> /dev/null`
+		case "$val" in
+			lan)
+			val="$default_lan_interface"
+			;;
+			wan)
+			val="$default_wan_interface"
+			;;
+			*)
+			val=""
+			;;
+		esac
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions"
+	return 0
+}
+
+set_forwarding_instance_interface()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.Interface"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			case "$val" in
+				$default_lan_interface)
+				val="lan"
+				;;
+				$default_wan_interface)
+				val="wan"
+				;;
+				*)
+				return $E_INVALID_PARAMETER_VALUE
+				;;
+			esac
+			$UCI_SET network.$uci_iface.interface="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+}
+
+get_forwarding_instance_forwarding_metric()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.ForwardingMetric"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local type="xsd:int"
+	local permissions="1"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.metric 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+	return 0
+}
+
+set_forwarding_instance_forwarding_metric()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.ForwardingMetric"
+	local uci_iface="$2"
+	local val="$3"
+
+	case $action in
+		set_value)
+			if [ "$val" = "-1" ];then
+				$UCI_SET network.$uci_iface.metric="$val"
+				apply_network_route_changes
+			fi
+
+			check_number "$val"
+			[ $? -ne 0 ] && return $E_INVALID_PARAMETER_VALUE
+			[ $val -lt -1 ] && return $E_INVALID_PARAMETER_VALUE
+			$UCI_SET network.$uci_iface.metric="$val"
+			apply_network_route_changes
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+	esac
+	return 0
+}
+
+get_forwarding_instance_mtu()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.MTU"
+	local iface="$2"
+	local nl="$3"
+	local val=""
+	local permissions="1"
+	local type="xsd:unsignedInt"
+	case "$action" in
+		get_value)
+		val=`$UCI_GET network.$iface.mtu 2> /dev/null`
+		;;
+		get_name)
+		[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+		;;
+		get_notification)
+		easycwmp_get_parameter_notification "val" "$parm"
+		;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+	return 0
+
+}
+
+set_forwarding_instance_mtu()
+{
+	local parm="InternetGatewayDevice.Layer3Forwarding.Forwarding.$1.MTU"
+	local uci_iface="$2"
+	local val="$3"
+	case $action in
+		set_value)
+			# [ $val -lt 1 -o $val -gt 1540 ] && return $E_INVALID_ARGUMENTS
+			if [ $val -ge 1 -a $val -le 1540 ];then
+				$UCI_SET network.$uci_iface.mtu="$val"
+				apply_network_route_changes
+			else
+				return $E_INVALID_PARAMETER_VALUE
+			fi
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+	return 0
+
+}
+
+get_device_routing_forwarding_params_all()
+{
+	local nl="$1"
+	local iface
+	local ifaces=`$UCI_SHOW network| grep "network\.@route\[[0-9]\+\]\.instance" | cut -d'.' -f2`
+	for iface in $ifaces; do
+		local num=`$UCI_GET network.$iface.instance`
+		eval "get_forwarding_instance_enable" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_status" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_type" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_dest_ipaddr" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_dest_subnet_mask" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_source_ipaddr" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_source_subnet_mask" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_gateway_ipaddr" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_interface" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_forwarding_metric" "$num" "$iface" "$nl"
+		eval "get_forwarding_instance_mtu" "$num" "$iface" "$nl"
+	done
+}
+
+
+get_device_routing() {
+local nums uci_iface
+case "$1" in
+	InternetGatewayDevice.)
+	get_device_routing_object 0
+	get_device_routing_default_connection_service "$2"
+	get_device_routing_forward_number_of_entries "$2"
+	get_device_routing_forwarding_object "$2"
+	get_device_routing_forwarding_instances "$2"
+	get_device_routing_forwarding_params_all "$2"
+	return 0
+	;;
+	InternetGatewayDevice.Layer3Forwarding.)
+	get_device_routing_object "$2"
+	get_device_routing_default_connection_service 0
+	get_device_routing_forward_number_of_entries 0
+	get_device_routing_forwarding_object 0
+	get_device_routing_forwarding_instances "$2"
+	get_device_routing_forwarding_params_all "$2"
+	return 0
+	;;
+	InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService)
+	get_device_routing_default_connection_service 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.ForwardNumberOfEntries)
+	get_device_routing_forward_number_of_entries 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.)
+	get_device_routing_forwarding_object "$2"
+	get_device_routing_forwarding_instances 0
+	get_device_routing_forwarding_params_all 0
+	return 0
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}." nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_enable "$nums" "$uci_iface" 0
+	get_forwarding_instance_status "$nums" "$uci_iface" 0
+	get_forwarding_instance_type "$nums" "$uci_iface" 0 
+	get_forwarding_instance_dest_ipaddr "$nums" "$uci_iface" 0
+	get_forwarding_instance_dest_subnet_mask "$nums" "$uci_iface" 0
+	get_forwarding_instance_source_ipaddr "$nums" "$uci_iface" 0
+	get_forwarding_instance_source_subnet_mask "$nums" "$uci_iface" 0
+	get_forwarding_instance_gateway_ipaddr "$nums" "$uci_iface" 0
+	get_forwarding_instance_interface "$nums" "$uci_iface" 0
+	get_forwarding_instance_forwarding_metric "$nums" "$uci_iface" 0
+	get_forwarding_instance_mtu "$nums" "$uci_iface" 0
+	return 0
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Enable)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Enable" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_enable "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Status)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Status" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_status "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Type)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Type" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_type "$nums" "$uci_iface" 0 
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.DestIPAddress)
+	easycwmp_parse_formated_parameter "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.DestIPAddress" "rc" "nums"
+	[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_dest_ipaddr "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.DestSubnetMask)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.DestSubnetMask" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_dest_subnet_mask "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.SourceIPAddress)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.SourceIPAddress" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_source_ipaddr "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.SourceSubnetMask)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.SourceSubnetMask" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_source_subnet_mask "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.GatewayIPAddress)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.GatewayIPAddress" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_gateway_ipaddr "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Interface)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Interface" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_interface "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.ForwardingMetric)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.ForwardingMetric" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_forwarding_metric "$nums" "$uci_iface" 0
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.MTU)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.MTU" nums uci_iface
+	[ "$uci_iface" = "" -o "$nums" = "" ] && return $E_INVALID_PARAMETER_NAME
+	get_forwarding_instance_mtu "$nums" "$uci_iface" 0
+	return $?
+	;;
+esac
+return $E_INVALID_PARAMETER_NAME
+}
+
+set_device_routing() {
+local num uci_iface
+case "$1" in
+	InternetGatewayDevice.Layer3Forwarding.|\
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.|\
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.|\
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Status)
+	[ "$action" = "set_value" ] && return $E_INVALID_PARAMETER_NAME
+	set_notification_common_argument "$parm" "$val"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Enable)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Enable" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_enable "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Type)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Type" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_type "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.DestIPAddress)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.DestIPAddress" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_dest_ipaddr "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.DestSubnetMask)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.DestSubnetMask" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_dest_subnet_mask "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.SourceIPAddress)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.SourceIPAddress" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_source_ipaddr "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.SourceSubnetMask)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.SourceSubnetMask" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_source_subnet_mask "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.GatewayIPAddress)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.GatewayIPAddress" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_gateway_ipaddr "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.Interface)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.Interface" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_interface "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.ForwardingMetric)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.ForwardingMetric" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_forwarding_metric "$num" "$uci_iface" "$2"
+	return $?
+	;;
+	InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.MTU)
+	get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}.MTU" num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	set_forwarding_instance_mtu "$num" "$uci_iface" "$2"
+	return $?
+	;;
+esac
+return $E_INVALID_PARAMETER_NAME
+}
+
+get_next_available_routing_instance_id()
+{
+	local ids
+	for i in `seq 128`
+	do
+		ids=`uci show network | grep "network\.@route\[[0-9]\+\].instance=$i"`	
+		if [ "$ids" == "" ];
+		then
+			return $i
+		fi
+	done
+	return 0
+}
+
+add_device_routing() {
+	get_next_available_routing_instance_id
+	local instance=$?
+
+	if [ $instance -gt 0 ];
+	then
+		local routing_instance=`$UCI_ADD network route`
+		$UCI_SET network.$routing_instance.enabled="0"
+		$UCI_SET network.$routing_instance.type="2"
+		$UCI_SET network.$routing_instance.target="0.0.0.0"
+		$UCI_SET network.$routing_instance.netmask="0.0.0.0"
+		$UCI_SET network.$routing_instance.srcaddr="0.0.0.0"
+		$UCI_SET network.$routing_instance.srcmask="0.0.0.0"
+		$UCI_SET network.$routing_instance.gateway="0.0.0.0"
+		$UCI_SET network.$routing_instance.interface="lan"
+		$UCI_SET network.$routing_instance.metric="0"
+		$UCI_SET network.$routing_instance.mtu="1500"
+		$UCI_SET network.$routing_instance.instance=$instance
+		apply_network_route_changes
+	fi
+	echo $instance
+}
+
+delete_device_routing() {
+	$UCI_DELETE network.$1
+	apply_network_route_changes
+	#execute_command_in_apply_service "wifi"
+}
+
+build_instances_device_routing() { 
+	local iface
+	local change_flag=0
+	local ifaces=`$UCI_SHOW network | grep "network\.@route\[[0-9]\+\]=route" | cut -d'.' -f2 | cut -d'=' -f1`
+	for iface in $ifaces; do
+		if [ "`$UCI_GET network.$iface.instance`" = "" ] ; then
+			get_next_available_routing_instance_id
+			if [ $? -eq 0 ];
+			then
+				break
+			fi
+			$UCI_SET network.$iface.instance=$?
+			change_flag=1
+		fi
+	done
+
+	if [ $change_flag -gt 0 ];
+	then
+		$UCI_COMMIT network
+	fi
+	return 0
+}
+
+add_object_device_routing() {
+	case "$1" in
+		InternetGatewayDevice.Layer3Forwarding.Forwarding.)
+		local instance=`add_device_routing`
+		easycwmp_set_parameter_notification "$1$instance." "0"
+		easycwmp_status_output "" "" "1" "$instance"
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}
+
+delete_object_device_routing() {
+	local num uci_iface
+	case "$1" in
+		InternetGatewayDevice.Layer3Forwarding.Forwarding.[0-9]*.)
+		get_device_routing_num_and_uci_iface "$1" "InternetGatewayDevice.Layer3Forwarding.Forwarding.{i}." num uci_iface
+		[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		delete_device_routing $uci_iface
+		easycwmp_remove_parameter_notification "$1"
+		easycwmp_status_output "" "" "1"
+		return 0
+		;;
+	esac
+	return $E_INVALID_PARAMETER_NAME
+}

@@ -1,0 +1,9 @@
+# modem  date for easycwmp
+
+config system
+	option imei ''
+	option ipaddr ''
+
+
+
+

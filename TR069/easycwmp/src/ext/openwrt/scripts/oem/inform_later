@@ -1,0 +1,32 @@
+#!/bin/sh
+
+sleep 2
+
+while true;
+do
+	local temp=`cd /usr/share/easycwmp/oem;lua tr069_extend_api.lua GetConnectionState`
+	local errorval=`echo ${temp%%;*}`
+	if [ "Error=0" = ${errorval} ]; then
+		local tempval=`echo ${temp#*ConnectionStatus=}`
+		local status=`echo ${tempval%%;*}`
+		if [ "$status" = "Connected" ]; then
+			tempval=`echo ${temp#*ExternalIPv4Address=}`
+			local externalip=`echo ${tempval%%;*}`
+                        local sn=`mmi --sn -r|grep Result|awk '{print $3}'| tr -d \" \"`
+                      
+                        local port=`$UCI_GET easycwmp.@local[0].port 2> /dev/null` 
+                        local connection_url="http://$externalip:$port/$sn"
+			`ubus call tr069 notify "{\"parameter\":\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionStatus\",\"value\":\"Connected\",\"type\":\"xsd:string\"}" > /dev/null 2>&1 &`
+                        `ubus call tr069 notify "{\"parameter\":\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress\",\"value\":\"$externalip\",\"type\":\"xsd:string\"}" > /dev/null 2>&1 &`
+                       `ubus call tr069 notify "{\"parameter\":\"InternetGatewayDevice.ManagementServer.ConnectionRequestURL\",\"value\":\"$connection_url\",\"type\":\"xsd:string\"}" > /dev/null 2>&1 &`
+			break
+		elif [ "$status" != "Conneting"]; then
+			break
+		fi
+	fi
+	
+	sleep 3
+done
+exit 0
+
+

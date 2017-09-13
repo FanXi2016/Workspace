@@ -1,0 +1,3403 @@
+#!/bin/sh
+# Copyright (C) 2012-2014 PIVA Software <www.pivasoftware.com>
+# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
+# 	Author: AHMED Zribi <ahmed.zribi@pivasoftware.com>
+# Copyright (C) 2011-2012 Luka Perkov <freecwmp@lukaperkov.net>
+
+get_wlan_enable() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Enable"
+	local nl="$2"
+	local type="xsd:boolean"
+	local permissions="1"
+
+	case "$action" in
+		get_value)
+			[ $1 -eq 1 ] && val=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+			[ $1 -eq 2 ] && val=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+			[ "$val" = "1" ] && val="false"
+			[ "$val" = "0" ] && val="true"
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+# the first and second configurations are config 2.4G in /etc/config/wireless
+# the 3rd and 4th configurations are config 5G in /etc/config/wireless.
+# enable 5g, disable 2.4g at the same time; enable 2.4g, disable 5g at the same time.
+set_wlan_enable() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Enable"
+	local val="$2"
+	local channel
+	local hwmode
+	local device
+
+	case $action in
+		set_value)
+			case $val in
+				true)
+					if [ $1 -eq 1 ];then
+						$UCI_SET wireless.@wifi-iface[0].disabled=0
+						$UCI_SET wireless.@wifi-iface[1].disabled=0
+						$UCI_SET wireless.@wifi-iface[2].disabled=1
+						$UCI_SET wireless.@wifi-iface[3].disabled=1
+						channel=`$UCI_GET wireless.@wifi-iface[0].24g_channel 2>/dev/null`
+						hwmode=`$UCI_GET wireless.@wifi-iface[0].24g_hwmode 2>/dev/null`
+						device=`$UCI_GET wireless.@wifi-iface[0].device 2>/dev/null`
+						$UCI_SET wireless.$device.channel=$channel
+						$UCI_SET wireless.$device.hwmode=$hwmode
+					elif [ $1 -eq 2 ];then
+						$UCI_SET wireless.@wifi-iface[0].disabled=1
+						$UCI_SET wireless.@wifi-iface[1].disabled=1
+						$UCI_SET wireless.@wifi-iface[2].disabled=0
+						$UCI_SET wireless.@wifi-iface[3].disabled=0
+						channel=`$UCI_GET wireless.@wifi-iface[2].5g_channel 2>/dev/null`
+						hwmode=`$UCI_GET wireless.@wifi-iface[2].5g_hwmode 2>/dev/null`
+						device=`$UCI_GET wireless.@wifi-iface[2].device 2>/dev/null`
+						$UCI_SET wireless.$device.channel=$channel
+						$UCI_SET wireless.$device.hwmode=$hwmode
+					else
+						return $E_INVALID_PARAMETER_NAME
+					fi
+					;;
+
+				false)
+					if [ $1 -eq 1 ];then
+						$UCI_SET wireless.@wifi-iface[0].disabled=1
+						$UCI_SET wireless.@wifi-iface[1].disabled=1
+						$UCI_SET wireless.@wifi-iface[2].disabled=0
+						$UCI_SET wireless.@wifi-iface[3].disabled=0
+						channel=`$UCI_GET wireless.@wifi-iface[2].5g_channel 2>/dev/null`
+						hwmode=`$UCI_GET wireless.@wifi-iface[2].5g_hwmode 2>/dev/null`
+						device=`$UCI_GET wireless.@wifi-iface[2].device 2>/dev/null`
+						$UCI_SET wireless.$device.channel=$channel
+						$UCI_SET wireless.$device.hwmode=$hwmode
+					elif [ $1 -eq 2 ];then
+						$UCI_SET wireless.@wifi-iface[0].disabled=0
+						$UCI_SET wireless.@wifi-iface[1].disabled=0
+						$UCI_SET wireless.@wifi-iface[2].disabled=1
+						$UCI_SET wireless.@wifi-iface[3].disabled=1
+						channel=`$UCI_GET wireless.@wifi-iface[0].24g_channel 2>/dev/null`
+						hwmode=`$UCI_GET wireless.@wifi-iface[0].24g_hwmode 2>/dev/null`
+						device=`$UCI_GET wireless.@wifi-iface[0].device 2>/dev/null`
+						$UCI_SET wireless.$device.channel=$channel
+						$UCI_SET wireless.$device.hwmode=$hwmode
+					else
+						return $E_INVALID_PARAMETER_NAME
+					fi
+					;;
+
+				*)
+					return $E_INVALID_PARAMETER_VALUE
+					;;
+			esac
+			$UCI_COMMIT wireless
+			execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_ssid_hidden() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BeaconAdvertisementEnabled"
+	local nl="$2"
+	local type="xsd:boolean"
+	local val=""
+	local permissions="1"
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET wireless.@wifi-iface[0].hidden 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET wireless.@wifi-iface[2].hidden 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+
+			if [ $val -eq 0 ];then
+				val="true"
+			elif [ $val -eq 1 ];then
+				val="false"
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+
+set_wlan_ssid_hidden() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BeaconAdvertisementEnabled"
+	local val="$2"
+
+	case $action in
+		set_value)
+			case $val in
+				true)
+					if [ $1 -eq 1 ];then
+						$UCI_SET wireless.@wifi-iface[0].hidden=0
+					elif [ $1 -eq 2 ];then
+						$UCI_SET wireless.@wifi-iface[2].hidden=0
+					else
+						return $E_INVALID_PARAMETER_VALUE
+					fi
+					;;
+
+				false)
+					if [ $1 -eq 1 ];then
+						$UCI_SET wireless.@wifi-iface[0].hidden=1
+					elif [ $1 -eq 2 ];then
+						$UCI_SET wireless.@wifi-iface[2].hidden=1
+					else
+						return $E_INVALID_PARAMETER_VALUE
+					fi
+					;;
+
+				*)
+					return $E_INVALID_PARAMETER_VALUE
+					;;
+
+			esac
+			$UCI_COMMIT wireless
+			execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_ssid() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.SSID"
+	local nl="$2"
+	local val=""
+	local permissions="1"
+	local type="xsd:string"
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET wireless.@wifi-iface[0].ssid 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET wireless.@wifi-iface[2].ssid 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_ssid() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.SSID"
+	local val="$2"
+	local len=${#val}
+
+	case $action in
+		set_value)
+			if [ $1 -eq 1 ];then
+				[ $len -eq 0 -o $len -gt 32 ] && return $E_INVALID_PARAMETER_VALUE
+				$UCI_SET wireless.@wifi-iface[0].ssid=$val
+			elif [ $1 -eq 2 ];then
+				[ $len -eq 0 -o $len -gt 32 ] && return $E_INVALID_PARAMETER_VALUE
+				$UCI_SET wireless.@wifi-iface[2].ssid=$val
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			$UCI_COMMIT wireless
+			execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_band() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.band"
+	local nl="$2"
+	local val=""
+	local permissions="0"
+	local type="xsd:string"
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET wireless.@wifi-iface[0].band  2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET wireless.@wifi-iface[2].band  2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_lan_wlan_config_num() {
+	local parm="InternetGatewayDevice.LANDevice.1.LANWLANConfigurationNumberOfEntries"
+	local nl="$1"
+	local val=""
+	local permissions="0"
+	local type="xsd:unsignedInt"
+
+	case "$action" in
+		get_value)
+			# val=`$UCI_SHOW wireless |grep "wireless\.@wifi-iface\[[0-9]\+\]\=" |wc -l`
+			val=2
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_lan_usb_config_num() {
+	local parm="InternetGatewayDevice.LANDevice.1.LANUSBInterfaceNumberOfEntries"
+	local nl="$1"
+	local val=""
+	local permissions="0"
+	local type="xsd:unsignedInt"
+
+	case "$action" in
+		get_value)
+			if [ -e /tmp/usbstorageavailable ];then
+				val=1
+			else
+				val=0
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_lan_eth_config_num() {
+	local parm="InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceNumberOfEntries"
+	local nl="$1"
+	local val=""
+	local permissions="0"
+	local type="xsd:unsignedInt"
+
+	case "$action" in
+		get_value)
+			val=1
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_maxbitrate() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.MaxBitRate"
+	local nl="$2"
+	local permissions="0"
+	local type="xsd:string"
+	local val
+	local status
+	local hwmode
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ "$status" = "0" ];then
+					hwmode=`grep hw_mode /var/run/hostapd-phy0.conf |awk -F '=' '{print $2}'`
+					case $hwmode in
+						b)
+						val="11"
+						;;
+						g)
+						val="54"
+						;;
+						n)
+						val="54"
+						;;
+						*)
+						val=""
+						;;
+					esac
+				else
+					val=""
+				fi
+				# val=`iw list |grep "Band 2" -B $$|grep Mbps|awk '{print $2}'|sort -n|tail -1`
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ "$status" = "0" ];then
+					hwmode=`grep hw_mode /var/run/hostapd-phy0.conf |awk -F '=' '{print $2}'`
+					case $hwmode in
+						a)
+						val="54"
+						;;
+						n)
+						val="54"
+						;;
+						*)
+						val=""
+						;;
+					esac
+				else
+					val=""
+				fi
+				# val=`iw list |grep "Band 2" -A $$|grep Mbps|awk '{print $2}'|sort -n|tail -1`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_channel() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Channel"
+	local permissions="1"
+	local type="xsd:unsignedInt"
+	local nl="$2"
+	local val
+	local status
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "channel=" /var/run/hostapd-phy0.conf |awk -F "=" '{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "channel=" /var/run/hostapd-phy0.conf |awk -F "=" '{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_channel() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Channel"
+	local val="$2"
+	local device
+	local status
+
+	case $action in
+		set_value)
+			case $1 in
+				1)
+					if [ $val -gt 0 ] && [ $val -le 13 ];then
+						:
+					elif [ "$val" == "0" ];then
+						val="auto-2.4G"
+					else
+						return $E_INVALID_PARAMETER_VALUE
+					fi
+					$UCI_SET wireless.@wifi-iface[0].24g_channel=$val
+					device=`$UCI_GET wireless.@wifi-iface[0].device  2> /dev/null`
+					status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+					[ $status -eq 0 ] && $UCI_SET wireless.$device.channel=$val
+					;;
+				2)
+					case $val in
+						149|153|157|161|165)
+							:
+							;;
+						0)
+							val="auto-5G"
+							;;
+						*)
+							return $E_INVALID_PARAMETER_VALUE
+							;;
+					esac
+					$UCI_SET wireless.@wifi-iface[2].5g_channel=$val
+					device=`$UCI_GET wireless.@wifi-iface[2].device  2> /dev/null`
+					status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+					[ $status -eq 0 ] && $UCI_SET wireless.$device.channel=$val
+					;;
+				*)
+					return $E_INVALID_PARAMETER_NAME
+					;;
+			esac
+
+			$UCI_COMMIT wireless
+		    execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			;;
+	esac
+}
+
+get_wlan_bssid() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BSSID"
+	local permissions="0"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+	local status
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "bssid=" /var/run/hostapd-phy0.conf |awk -F "=" "NR==1"'{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				fi
+
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "bssid=" /var/run/hostapd-phy0.conf |awk -F "=" "NR==1"'{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_status() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Status"
+	local permissions="0"
+	local type="xsd:string"
+	local nl="$2"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			[ "$val" = "1" ] && val="down" || val="up"
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+###Basic =wep  and 11i =wpa2 wpa_num =0,1,2,3
+get_wlan_beacon_type() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BeaconType"
+	local permissions="1"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+	local wpa_num
+	local have_wep
+	local status
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					wpa_num=`cat /var/run/hostapd-phy0.conf | grep "wpa=" | awk -F "=" "NR==1"'{ print $2 }'`
+				#	have_wep=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key" | awk -F "=" "NR==$1"'{ print $2 }'`
+				elif [ $status -eq 1 ];then
+					wpa_num=""
+				fi
+
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					wpa_num=`cat /var/run/hostapd-phy0.conf | grep "wpa=" | awk -F "=" "NR==1"'{ print $2 }'`
+				#	have_wep=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key" | awk -F "=" "NR==$1"'{ print $2 }'`
+				elif [ $status -eq 1 ];then
+					wpa_num=""
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+
+		#	if [ -n "$have_wep" ];then
+		#		local wep_num=4
+		#	else
+		#		local wep_num=0
+		#	fi
+
+		#	let "temp=wpa_num+wep_num"
+			case "$wpa_num" in
+			0)
+				have_wep=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key" | awk -F "=" "NR==1"'{ print $2 }'`
+				if [ "$have_wep" = "" ];then
+					val="None"
+				else
+					val="Basic"
+				fi
+				;;
+			1)
+				val="WPA"
+				;;
+			2)
+				val="11i"
+				;;
+			3)
+				val="WPAand11i"
+				;;
+			*)
+				val=""
+				;;
+		#	4)
+		#		val="Basic"
+		#		;;
+		#	5)
+		#		val="BasicandWPA"
+		#		;;
+		#	6)
+		#		val="Basicand11i"
+		#		;;
+		#	7)
+		#		val="BasicandWPAand11i"
+		#		;;
+			esac
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_beacon_type() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BeaconType"
+	local wep_key
+	local wpa_key
+	local val="$2"
+
+	case $action in
+		set_value)
+			case $val in
+				"None")
+					val="none"
+					wep_key=`$UCI_GET wireless.@wifi-iface[0].wep_key 2>/dev/null`
+					$UCI_SET wireless.@wifi-iface[0].key=$wep_key
+					$UCI_SET wireless.@wifi-iface[2].key=$wep_key
+					;;
+				"Basic")
+					device=`$UCI_GET wireless.@wifi-iface[$1].device 2> /dev/null`
+					flag=`$UCI_GET wireless.$device.hwmode 2> /dev/null`
+					echo "$flag" |grep "n" >/dev/null
+					[ $? -eq 0 ] && return $E_INTERNAL_ERROR
+
+					val="wep-open"
+					wep_key=`$UCI_GET wireless.@wifi-iface[0].wep_key 2>/dev/null`
+					$UCI_SET wireless.@wifi-iface[0].key=$wep_key
+					$UCI_SET wireless.@wifi-iface[2].key=$wep_key
+					;;
+				"WPA")
+					val="psk"
+					wpa_key=`$UCI_GET wireless.@wifi-iface[0].wpa_key 2>/dev/null`
+					$UCI_SET wireless.@wifi-iface[0].key=$wpa_key
+					$UCI_SET wireless.@wifi-iface[2].key=$wpa_key
+					;;
+				"11i")
+					val="psk2"
+					wpa_key=`$UCI_GET wireless.@wifi-iface[0].wpa_key 2>/dev/null`
+					$UCI_SET wireless.@wifi-iface[0].key=$wpa_key
+					$UCI_SET wireless.@wifi-iface[2].key=$wpa_key
+					;;
+				"WPAand11i")
+					val="psk+mixed"
+					wpa_key=`$UCI_GET wireless.@wifi-iface[0].wpa_key 2>/dev/null`
+					$UCI_SET wireless.@wifi-iface[0].key=$wpa_key
+					$UCI_SET wireless.@wifi-iface[2].key=$wpa_key
+					;;
+				*)
+					return $E_INVALID_PARAMETER_VALUE
+					;;
+			esac
+			$UCI_SET wireless.@wifi-iface[0].encryption=$val
+			$UCI_SET wireless.@wifi-iface[2].encryption=$val
+			$UCI_COMMIT wireless
+		 	execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+#Standard Indicates which IEEE 802.11 mode the device is currently operating in. Enumeration of: a/b/g/n
+get_wlan_standard() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Standard"
+	local permissions="1"
+	local nl="$2"
+	local type="xsd:string"
+	local device
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				# device=`$UCI_GET wireless.@wifi-iface[0].device 2> /dev/null`
+				# val=`$UCI_GET wireless.$device.24g_hwmode 2> /dev/null`
+				val=`$UCI_GET wireless.@wifi-iface[0].24g_hwmode 2> /dev/null`
+				val=${val#11}
+			elif [ $1 -eq 2 ];then
+				# device=`$UCI_GET wireless.@wifi-iface[2].device 2> /dev/null`
+				# val=`$UCI_GET wireless.$device.5g_hwmode 2> /dev/null`
+				val=`$UCI_GET wireless.@wifi-iface[2].5g_hwmode 2> /dev/null`
+				val=${val#11}
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_standard() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.Standard"
+	local val="$2"
+
+	case $action in
+		set_value)
+			if [ $1 -eq 1 ];then
+				case $val in
+					b|11b)
+					val="11b"
+					;;
+					g|11g)
+					val="11g"
+					;;
+					ng|gn|g+n|n+g|n/g|g/n|11ng|11gn|11g/n|11n/g)
+					val="11ng"
+					;;
+					*)
+					return $E_INVALID_PARAMETER_VALUE
+					;;
+				esac
+				$UCI_SET wireless.@wifi-iface[0].24g_hwmode=$val
+				device=`$UCI_GET wireless.@wifi-iface[0].device  2> /dev/null`
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				[ $status -eq 0 ] && $UCI_SET wireless.$device.hwmode=$val
+			elif [ $1 -eq 2 ];then
+				case $val in
+					a|11a)
+					val="11a"
+					;;
+					na|an|a+n|n+a|n/a|a/n|11na|11an|11a/n|11n/a)
+					val="11na"
+					;;
+					*)
+					return $E_INVALID_PARAMETER_VALUE
+					;;
+				esac
+				$UCI_SET wireless.@wifi-iface[2].5g_hwmode=$val
+				device=`$UCI_GET wireless.@wifi-iface[2].device  2> /dev/null`
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				[ $status -eq 0 ] && $UCI_SET wireless.$device.hwmode=$val
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+
+			$UCI_COMMIT wireless
+			execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_wepkey_index() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKeyIndex"
+	local val
+	local nl="$2"
+	local permissions="0"
+	local type="xsd:unsignedInt"
+
+	case "$action" in
+		get_value)
+			grep "wep_default_key=" /var/run/hostapd-phy0.conf >/dev/null
+			[ $? -eq 0 ] && val=1 || val=""
+			;;
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_possible_transmit_rates() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PossibleDataTransmitRates"
+	local val
+	local nl="$2"
+	local permissions="0"
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`iw list |grep "Band 2" -B $$|grep Mbps|awk '{print $2}'|sort -n`
+			elif [ $1 -eq 2 ];then
+				val=`iw list |grep "Band 2" -A $$|grep Mbps|awk '{print $2}'|sort -n`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_radio_enabled() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.RadioEnabled"
+	local val
+	local nl="$2"
+	local type="xsd:boolean"
+	local permissions="1"
+
+	case "$action" in
+		get_value)
+			ifconfig |grep wlan > /dev/null
+			if [ $? -eq 0 ];then
+				val="true"
+			else
+				val="false"
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_radio_enabled() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.RadioEnabled"
+	local val="$2"
+
+	case $action in
+		set_value)
+			case $val in
+				true)
+					wifi >/dev/null
+					;;
+				false)
+					wifi down >/dev/null
+					;;
+			esac
+			;;
+
+		set_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+}
+
+get_wlan_channels_in_use() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.ChannelsInUse"
+	local permissions="0"
+	local nl="$2"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "channel=" /var/run/hostapd-phy0.conf |awk -F "=" '{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`grep "channel=" /var/run/hostapd-phy0.conf |awk -F "=" '{print $2}'`
+				elif [ $status -eq 1 ];then
+					val=""
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+# set_wlan_wepkey_index() {
+# 	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKeyIndex"
+# 	local val="$2"
+#
+# 	case $action in
+# 		set_value)
+# 			if [ $1 -eq 1 ] && [ $val -eq 1 ];then
+# 		   			$UCI_SET wireless.@wifi_iface[0].key=$val
+# 			elif [ $1 -eq 2 ] && [ $val -eq 1 ];then
+# 		   			$UCI_SET wireless.@wifi_iface[2].key=$val
+# 			else
+# 				return $E_INVALID_PARAMETER_NAME
+# 			fi
+# 			$UCI_COMMIT wireless
+# 		   	execute_command_in_apply_service "wifi"
+# 			return $E_INVALID_PARAMETER_VALUE
+# 			;;
+#
+# 		set_notification)
+#			easycwmp_get_parameter_notification "val" "$parm"
+# 			;;
+# 	esac
+# }
+
+get_wlan_wepkey_key() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKey.1.WEPKey"
+	local val
+	local nl="$2"
+	local permissions="1"
+
+	case "$action" in
+		get_value)
+			val=""
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_wepkey_key() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKey.1.WEPKey"
+	local val="$2"
+	local len=${#val}
+	local hex
+
+	case $action in
+		set_value)
+			# $?=1,means the key is 10 hex digits and the len=10/26; $?=0, means the key is acsii and len=5/13.
+			echo "$val"|grep -qE '[:,;"&]'
+			[ $? -eq 0 ] && return $E_INVALID_PARAMETER_VALUE
+
+			echo -n "$val"|grep -qE "[^a-fA-F0-9]"
+			hex=$?
+			case $1 in
+				1|2)
+					device=`$UCI_GET wireless.@wifi-iface[$1].device 2> /dev/null`
+					flag=`$UCI_GET wireless.$device.hwmode 2> /dev/null`
+					echo "$flag" |grep "n" >/dev/null
+					[ $? -eq 0 ] && return $E_INTERNAL_ERROR
+
+					if [ $len -eq 5 -o $len -eq 13 ];then
+	 				  	$UCI_SET wireless.@wifi-iface[0].key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[0].wep_key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[2].key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[2].wep_key="$val"
+					elif [ $hex -ne 0 ] && [ $len -eq 10 -o $len -eq 26 ];then
+	 				  	$UCI_SET wireless.@wifi-iface[0].key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[0].wep_key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[2].key="$val"
+	 				  	$UCI_SET wireless.@wifi-iface[2].wep_key="$val"
+					else
+						return $E_INVALID_PARAMETER_VALUE
+					fi
+
+					local old_val=`$UCI_GET wireless.@wifi-iface[0].encryption 2>/dev/null`
+					echo $old_val|grep "wep" >/dev/null
+					if [ $? -eq 0 ];then
+						:
+					else
+						$UCI_SET wireless.@wifi-iface[0].encryption="wep-shared"
+						$UCI_SET wireless.@wifi-iface[2].encryption="wep-shared"
+					fi
+					$UCI_COMMIT wireless
+	 				execute_command_in_apply_service "wifi"
+					;;
+
+				*)
+					return $E_INVALID_PARAMETER_NAME
+			esac
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_psk_tables_psk () {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey.$2.PreSharedKey"
+	local val
+	local nl="$3"
+	local permissions="1"
+
+	case "$action" in
+		get_value)
+			val=""
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_psk_tables_psk () {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey.$2.PreSharedKey"
+	local uci_iface="$2"
+	local val="$3"
+	local len=${#val}
+
+	case $action in
+		set_value)
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_psk_tables_key () {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey.$2.KeyPassphrase"
+	local val
+	local nl="$3"
+	local permissions="1"
+	    case "$action" in
+		get_value)
+			val=""
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_psk_tables_key () {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey.$2.KeyPassphrase"
+	local uci_iface="$2"
+	local val="$3"
+	local len=${#val}
+	case $action in
+		set_value)
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_keypass_phrase() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.KeyPassphrase"
+	local permissions="1"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+
+    case "$action" in
+		get_value)
+			val=""
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+    esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+
+set_wlan_keypass_phrase() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.KeyPassphrase"
+	local val="$2"
+	local len=${#val}
+
+	case $action in
+		set_value)
+			if [ $1 -eq 1 -o $1 -eq 2 ];then
+				# echo '$val'|grep -qE '[,":;&]'
+				echo "$val"|grep -qE '[:,;"&]'
+				[ $? -eq 0 ] && return $E_INVALID_PARAMETER_VALUE
+
+				case $len in
+					8|9|[1-5][0-9]|6[0-3])
+						$UCI_SET  wireless.@wifi-iface[0].key="$val"
+						$UCI_SET  wireless.@wifi-iface[0].wpa_key="$val"
+						$UCI_SET  wireless.@wifi-iface[2].key="$val"
+						$UCI_SET  wireless.@wifi-iface[2].wpa_key="$val"
+						;;
+					*)
+						return $E_INVALID_PARAMETER_VALUE
+						;;
+				esac
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+
+			local old_val=`$UCI_GET wireless.@wifi-iface[0].encryption 2>/dev/null`
+			echo $old_val|grep "psk" >/dev/null
+			if [ $? -eq 0 ];then
+				:
+			else
+				$UCI_SET wireless.@wifi-iface[0].encryption="psk"
+				$UCI_SET wireless.@wifi-iface[2].encryption="psk"
+			fi
+			$UCI_COMMIT wireless
+	  		execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_basic_encryption_modes() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BasicEncryptionModes"
+	local permissions="1"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[0].encryption 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[2].encryption 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+
+			case $val in
+				none|wep-open|wep-shared)
+					:
+					;;
+				*)
+					val=""
+					;;
+			esac
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+set_wlan_basic_encryption_modes() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BasicEncryptionModes"
+	local val="$2"
+	local wep_key
+	local device
+	local flag
+
+	case $action in
+		set_value)
+			if [ $1 -eq 1 -o $1 -eq 2 ];then
+				case $val in
+					none)
+						$UCI_SET wireless.@wifi-iface[0].encryption="$val"
+						$UCI_SET wireless.@wifi-iface[2].encryption="$val"
+						;;
+					wep-open|wep-shared)
+						device=`$UCI_GET wireless.@wifi-iface[$1].device 2> /dev/null`
+						flag=`$UCI_GET wireless.$device.hwmode 2> /dev/null`
+						echo "$flag" |grep "n" >/dev/null
+						[ $? -eq 0 ] && return $E_INTERNAL_ERROR
+						$UCI_SET wireless.@wifi-iface[0].encryption="$val"
+						$UCI_SET wireless.@wifi-iface[2].encryption="$val"
+						wep_key=`$UCI_GET wireless.@wifi-iface[0].wep_key 2>/dev/null`
+						$UCI_SET wireless.@wifi-iface[0].key="$wep_key"
+						$UCI_SET wireless.@wifi-iface[2].key="$wep_key"
+						;;
+					*)
+						return $E_INVALID_PARAMETER_VALUE
+						;;
+				esac
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			$UCI_COMMIT wireless
+		    execute_command_in_apply_service "wifi"
+			;;
+
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+}
+
+get_wlan_basic_authentication_mode() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.BasicAuthenticationMode"
+	local permissions="0"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[0].encryption 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[2].encryption 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			val=`echo "$val" |grep "none";  echo "$val"|grep "wep"`
+			if [ "$val" = "" ];then
+				val=""
+			else
+				val="None"
+			fi
+		#	local num
+		#	let num=$num+1
+	  	#	local index=`cat /var/run/hostapd-phy0.conf | grep "auth_algs=" |awk -F "=" "NR==1"'{ print $2 }'`
+	  	#	local wpa=`cat /var/run/hostapd-phy0.conf | grep "wpa=" |awk -F "=" "NR==1"'{ print $2 }'`
+		#	local wep_default_key=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key=" |awk -F "=" "NR==1"'{ print $2 }'`
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_wpa_authentication_mode() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WPAAuthenticationMode"
+	local permissions="0"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[0].encryption 2> /dev/null`
+			elif [ $1 -eq 2 ];then
+				val=`$UCI_GET  wireless.@wifi-iface[2].encryption 2> /dev/null`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			val=`echo "$val" |grep "psk"`
+			if [ "$val" = "" ];then
+				val=""
+			else
+				val="PSKAuthentication"
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+##aes_ccmp =ccmp
+get_wlan_wpa_encryption_modes() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WPAEncryptionModes"
+	local permissions="1"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+	local status
+	local have_wep
+	local have_TKIP
+	local have_AES_CCMP
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 -o $1 -eq 2 ];then
+				val=`$UCI_GET wireless.@wifi-iface[0].encryption 2>/dev/null`
+				case $val in
+					*psk*)
+						:
+						;;
+					*)
+						val=""
+						;;
+				esac
+			fi
+
+	#		if [ $1 -eq 1 ];then
+	#			status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+	#			if [ $status -eq 0 ];then
+	#				have_wep=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key= |" awk -F "=" "NR==$1"'{print $2}'`
+	#				have_TKIP=`cat /var/run/hostapd-phy0.conf | grep "wpa_pairwise=" |awk -F "=" "NR==$1"'{print $2}'`
+	#				have_AES_CCMP=`cat /var/run/hostapd-phy0.conf | grep "rsn_pairwise="|awk -F "=" "NR==$1"'{print $2}'`
+	#			elif [ $status -eq 1 ];then
+	#				have_wep=""
+	#				have_TKIP=""
+	#				have_AES_CCMP=""
+	#			fi
+
+	#		elif [ $1 -eq 2 ];then
+	#			status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+	#			if [ $status -eq 0 ];then
+	#				have_wep=`cat /var/run/hostapd-phy0.conf | grep "wep_default_key= |" awk -F "=" "NR==$1"'{print $2}'`
+	#				have_TKIP=`cat /var/run/hostapd-phy0.conf | grep "wpa_pairwise=" |awk -F "=" "NR==$1"'{print $2}'`
+	#				have_AES_CCMP=`cat /var/run/hostapd-phy0.conf | grep "rsn_pairwise="|awk -F "=" "NR==$1"'{print $2}'`
+	#			elif [ $status -eq 1 ];then
+	#				have_wep=""
+	#				have_TKIP=""
+	#				have_AES_CCMP=""
+	#			fi
+	#		else
+	#			return $E_INVALID_PARAMETER_NAME
+	#		fi
+
+	#		if [ -n "$have_wep" ];then
+	#		     local wepEncry=2
+	#		else
+	#		    local wepEncry=0
+	#		fi
+
+	#		if [ -n "$have_TKIP" ];then
+	#		     local TkipEncry=3
+	#		else
+	#		    local TkipEncry=0
+	#		fi
+
+	#		if [ -n "$have_AES_CCMP" ];then
+	#		     local AESEncry=4
+	#		else
+	#		    local AESEncry=0
+	#		fi
+
+	#		let "enum=wepEncry+TkipEncry+AESEncry"
+	#		case "$enum" in
+	#			2)
+	#			val="WEPEncryption"
+	#			;;
+	#			3)
+	#			val="TKIPEncryption"
+	#			;;
+	#			5)
+	#			val="WEPandTKIPEncryption"
+	#			;;
+	#			4)
+	#			val="AESEncryption"
+	#			;;
+	#			6)
+	#			val="WEPandAESEncryption"
+	#			;;
+	#			7)
+	#			val="TKIPandAESEncryption"
+	#			;;
+	#			9)
+	#			val="WEPandTKIPandAESEncryption"
+	#			;;
+	#			*)
+	#			val=""
+	#			;;
+	#		esac
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+
+}
+
+set_wlan_wpa_encryption_modes() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WPAEncryptionModes"
+	local val=$2
+	local wpa_key
+
+	case $action in
+		set_value)
+			if [ $1 -eq 1 -o $1 -eq 2 ];then
+				device=`$UCI_GET wireless.@wifi-iface[$1].device 2> /dev/null`
+				flag=`$UCI_GET wireless.$device.hwmode 2> /dev/null`
+				echo "$flag" |grep "n" >/dev/null
+				if [ $? -eq 0 ];then
+					case $val in
+						psk+ccmp|psk2+ccmp|psk+mixed+ccmp)
+							$UCI_SET wireless.@wifi-iface[0].encryption="$val"
+							$UCI_SET wireless.@wifi-iface[2].encryption="$val"
+							;;
+						*)
+							return $E_INVALID_PARAMETER_VALUE
+							;;
+					esac
+				else
+					case $val in
+						psk|psk+tkip|psk+ccmp|psk2|psk2+tkip|psk2+ccmp|psk+mixed+ccmp|psk+mixed+tkip|psk+mixed)
+							$UCI_SET wireless.@wifi-iface[0].encryption="$val"
+							$UCI_SET wireless.@wifi-iface[2].encryption="$val"
+							;;
+						*)
+							return $E_INVALID_PARAMETER_VALUE
+							;;
+					esac
+
+				fi
+				wpa_key=`$UCI_GET wireless.@wifi-iface[0].wpa_key 2>/dev/null`
+				$UCI_SET wireless.@wifi-iface[0].key="$wpa_key"
+				$UCI_SET wireless.@wifi-iface[2].key="$wpa_key"
+				$UCI_COMMIT wireless
+			    execute_command_in_apply_service "wifi"
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+		set_notification)
+			set_notification_common_argument "$parm" "$val"
+ 			return $?
+			;;
+	esac
+
+}
+
+#Comma-separated list (maximum length 1024) of strings. Possible radio channels for the wireless standard (a, b or g) and the regulatory domain.
+
+get_wlan_possible_channels() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PossibleChannels"
+	local permissions="0"
+	local nl="$2"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			if [ $1 -eq 1 ];then
+				val=`iw list |grep -B $$ "Band 2"|grep dBm|awk '{print $4}'|cut -d '[' -f2 |cut -d ']' -f1|sort -n`
+			elif [ $1 -eq 2 ];then
+				val=`iw list |grep -A $$ "Band 2"|grep dBm|awk '{print $4}'|cut -d '[' -f2 |cut -d ']' -f1|sort -n`
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_interface_device() {
+	local num
+	local ssid
+	local iface
+	local ifdevice
+	local ifaces=`$UCI_SHOW wireless| grep "wireless\.@wifi-iface\[[0-9]\+\]\.instance" | cut -d'.' -f2`
+
+	for iface in $ifaces; do
+		val=`$UCI_GET wireless.$iface.disabled 2> /dev/null`
+		if [ $val = "0" ];then
+		     ssid=`$UCI_GET wireless.$iface.ssid`
+		     break
+		fi
+	done
+
+	local i=0
+	for ssidlist in `cat /var/run/hostapd-phy0.conf |grep "^ssid" |cut -d'=' -f2`;do
+		if [ "$ssid" = "$ssidlist" ];then
+			let i=i+1
+			break
+		fi
+		let i=i+1
+	done
+	ifdevice=`cat /var/run/hostapd-phy0.conf |grep "wlan0"|awk -F "=" "NR==$i"'{print $2}'`
+	eval "export -- \"$1=\"\"$ifdevice\"\"\""
+}
+
+get_wlan_interface_num() {
+	local num
+	local ssid
+	local iface
+	local ifdevice
+	local ifaces=`$UCI_SHOW wireless| grep "wireless\.@wifi-iface\[$1\]\.instance" | cut -d'.' -f2`
+	for iface in $ifaces; do
+		val=`$UCI_GET wireless.$iface.disabled 2> /dev/null`
+		if [ $val = "0" ];then
+		     ssid=`$UCI_GET wireless.$iface.ssid`
+		     break
+		fi
+	done
+	local i=0
+	for ssidlist in `cat /var/run/hostapd-phy0.conf |grep "^ssid" |cut -d'=' -f2`;do
+		if [ "$ssid" = "$ssidlist" ];then
+			let i=i+1
+			break
+		fi
+		let i=i+1
+	done
+	ifdevice=`cat /var/run/hostapd-phy0.conf |grep "wlan0"|awk -F "=" "NR==$i"'{print $2}'`
+	eval "export -- \"$1=\"\"$ifdevice\"\"\""
+}
+
+#########wlan interface total  statics
+
+#/sys/class/net/wlan0/statistics/rx_packets: 收到的数据包数据
+get_wlan_totalBytesSent() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.TotalBytesSent"
+	local permissions="0"
+	local nl=$2
+	local type="xsd:unsignedInt"
+	local val
+	local ifdev
+	local status
+
+	case "$action" in
+		get_value)
+			get_wlan_interface_device "ifdev"
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/tx_bytes`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/tx_bytes`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_totalBytesReceived()
+{
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.TotalBytesReceived"
+	local permissions="0"
+	local nl=$2
+	local type="xsd:unsignedInt"
+	local val
+	local ifdev
+	local status
+
+	case "$action" in
+		get_value)
+			get_wlan_interface_device "ifdev"
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/rx_bytes`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/rx_bytes`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_totalPacketsSent() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.TotalPacketsSent"
+	local permissions="0"
+	local nl=$2
+	local type="xsd:unsignedInt"
+	local val
+	local ifdev
+	local status
+
+	case "$action" in
+		get_value)
+			get_wlan_interface_device "ifdev"
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/tx_packets`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/tx_packets`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_totalPacketsReceived() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.TotalPacketsReceived"
+	local permissions="0"
+	local nl=$2
+	local type="xsd:unsignedInt"
+	local val
+	local ifdev
+	local status
+
+	case "$action" in
+		get_value)
+			get_wlan_interface_device "ifdev"
+			if [ $1 -eq 1 ];then
+				status=`$UCI_GET wireless.@wifi-iface[0].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/rx_packets`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			elif [ $1 -eq 2 ];then
+				status=`$UCI_GET wireless.@wifi-iface[2].disabled 2> /dev/null`
+				if [ $status -eq 0 ];then
+					val=`cat /sys/class/net/$ifdev/statistics/rx_packets`
+				elif [ $status -eq 1 ];then
+					val=0
+				else
+					return $E_INVALID_PARAMETER_VALUE
+				fi
+			else
+				return $E_INVALID_PARAMETER_NAME
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_statistics() {
+	get_wlan_totalBytesSent $1
+	get_wlan_totalBytesReceived $1
+	get_wlan_totalPacketsSent $1
+	get_wlan_totalPacketsReceived $1
+}
+
+####################################wlan interface total  statics
+get_wlan_associated_device_macaddress() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceMACAddress"
+	local permissions="0"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			local ifdev
+			get_wlan_interface_device "ifdev"
+			val=`iw dev  $ifdev station dump|grep "Station"|awk -F " " "NR==$2"'{print $2}'`
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+
+get_wlan_associated_device_ipaddress() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceIPAddress"
+	local permissions="0"
+	local type="xsd:string"
+	local val
+
+	case "$action" in
+		get_value)
+			local ifdev
+			get_wlan_interface_device "ifdev"
+			local mac=`iw dev  $ifdev station dump|grep "Station"|awk -F " " "NR==$2"'{print $2}'`
+			if [ -z "$mac" ];then
+				val=" "
+			else
+				val=`cat /proc/net/arp|grep "$mac" |cut -d ' ' -f1`
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+get_wlan_associated_device_authentication_state() {
+	local parm="InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.AssociatedDevice.$2.AssociatedDeviceAuthenticationState"
+	local permissions="0"
+	local type="xsd:boolean"
+	local val
+
+	case "$action" in
+		get_value)
+			local ifdev
+			get_wlan_interface_device "ifdev"
+			val=`iw dev $ifdev station dump |grep "authenticated"|awk "NR==$2"'{print $2}'`
+			if [ "$val" = "yes" ];then
+				val="true"
+			else
+				val="false"
+			fi
+			;;
+
+		get_name)
+			[ "$nl" = "1" ] && return $E_INVALID_ARGUMENTS
+			;;
+
+		get_notification)
+			easycwmp_get_parameter_notification "val" "$parm"
+			;;
+	esac
+
+	easycwmp_output "$parm" "$val" "$permissions" "$type"
+}
+
+
+#wanly add end ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+add_wlan_iface() {
+	local instance=`get_max_instance`
+	local wifi_iface=`$UCI_ADD wireless wifi-iface`
+	$UCI_SET wireless.$wifi_iface.device=wl0
+	$UCI_SET wireless.$wifi_iface.encryption=none
+	$UCI_SET wireless.$wifi_iface.mode=ap
+	$UCI_SET wireless.$wifi_iface.ssid=DefaultSSID
+	$UCI_SET wireless.$wifi_iface.instance=$((++instance))
+	$UCI_COMMIT wireless
+	execute_command_in_apply_service "wifi"
+	echo $instance
+}
+
+delete_wlan_iface() {
+	$UCI_DELETE wireless.$1
+	$UCI_COMMIT wireless
+	execute_command_in_apply_service "wifi"
+}
+
+get_lan_device_wlan_configuration_object() {
+	nl="$1"
+	case "$action" in
+		get_name)
+		[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration." "" "0"
+		;;
+	esac
+}
+
+get_wlan_configuration_instances() {
+	local nl="$1"
+	[ "$action" != "get_name" -o "$nl" = "1" ] && return
+	local num
+	local instances="1 2"
+	for num in $instances; do
+		easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$num." "" "0"
+	done
+}
+
+# get_lan_device_wlan_configuration_presharekey_object() {
+# nl="$1"
+# case "$action" in
+# 	get_name)
+# 	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$num.PreSharedKey." "" "0"
+# 	;;
+# esac
+# }
+#
+# get_lan_device_wlan_configuration_presharekey_instances() {
+# nl="$1"
+# case "$action" in
+# 	get_name)
+# 	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$num.PreSharedKey.$i." "" "0"
+# 	;;
+# esac
+# }
+
+get_wlan_num_and_uci_iface() {
+	local parm="$1"
+	local parm_check="$2"
+	easycwmp_parse_formated_parameter "$parm" "$parm_check" "rc" "__num"
+	[ "$rc" != "0" ] && return
+	local __uci_iface=`$UCI_SHOW wireless | grep "wireless\.@wifi-iface\[[0-9]\+\].instance=$__num" | head -1 | cut -d'.' -f2`
+	eval "export -- \"$3=\"\"$__num\"\"\""
+	eval "export -- \"$4=\"\"$__uci_iface\"\"\""
+}
+
+get_max_instance() {
+	local max=`$UCI_SHOW wireless | grep "wireless\.@wifi-iface\[[0-9]\+\].instance=" | cut -d'=' -f2 | sort -ru | head -1`
+	echo ${max:-0}
+}
+
+get_lan_device_object() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice." "" "0"
+	;;
+esac
+}
+
+get_lan_device_instance() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1." "" "0"
+	;;
+esac
+}
+
+get_host_ipinterface_object() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface." "" "1"
+	;;
+esac
+}
+
+get_host_ipinterface_instance() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1." "" "1"
+	;;
+esac
+}
+
+get_wlan_wepkey_object() {
+	local nl="$2"
+
+	case "$action" in
+		get_name)
+		[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKey." "" "0"
+		;;
+	esac
+}
+
+get_wlan_wepkey_instance() {
+	local nl="$2"
+
+	case "$action" in
+		get_name)
+		[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.WEPKey.1." "" "0"
+		;;
+	esac
+}
+
+
+get_wlan_psk_object() {
+# local uci_iface="$2"
+local nl="$3"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey." "" "0"
+	;;
+esac
+}
+
+get_wlan_psk_instance() {
+# local uci_iface="$2"
+	local nl="$3"
+	local var
+	local num=10
+
+	[ "$action" != "get_name" -o "$nl" = "1" ] && return
+	local i=1
+	while [ $i -le $num ]
+	do
+		easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$1.PreSharedKey.${i}." "" "0"
+		let i=$i+1
+	done
+}
+
+get_lan_device_wlan_configuration_instance() {
+param="$1"
+nl="$2"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "$param" "" "1"
+	;;
+esac
+}
+
+
+get_lan_device_hosts_info_object() {
+	nl="$1"
+
+	case "$action" in
+		get_name)
+			[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts." "" "0"
+			;;
+	esac
+}
+
+# get_lan_device_hosts_info_instance() {
+# 	nl="$1"
+# 	case "$action" in
+# 		get_name)
+# 			[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host." "" "0"
+# 			;;
+# 	esac
+# }
+
+get_lan_device_host_info_object() {
+	nl="$1"
+
+	case "$action" in
+		get_name)
+			[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host." "" "0"
+			;;
+	esac
+}
+
+get_lan_device_host_info_instance() {
+	local max_num
+	local dyn_num
+	get_lan_hosts_num "dyn_num" "max_num"
+	echo "dyn_num: $dyn_num, max_num: $max_num"
+	local i=1
+	nl="$2"
+
+	case "$action" in
+		get_name)
+			while [ $i -le $max_num ];do
+				[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i." "" "0"
+				let i=$i+1
+			done
+			;;
+	esac
+}
+
+get_hostconfigmanage_object() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement." "" "1"
+	;;
+esac
+}
+
+get_hostconfigmanage_instance () {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement." "" "1"
+	;;
+esac
+}
+
+# add by Zhao Zijun begin
+get_lanEtherinterface_object() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig." "" "0"
+	;;
+esac
+}
+# add by Zhao Zijun end
+
+get_lanEtherinterface_instance () {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1." "" "0"
+	;;
+esac
+}
+
+get_lanEtherinterface_stats_object() {
+nl="$1"
+case "$action" in
+	get_name)
+	[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats." "" "0"
+	;;
+esac
+
+}
+
+####
+#wanly add begin  AssociatedDevice station info
+get_lan_device_wlan_configuration_AssociatedDevice_object() {
+	local num="$1"
+	local nl="$2"
+
+	case "$action" in
+		get_name)
+			[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$num.AssociatedDevice." "" "0"
+			;;
+	esac
+}
+
+get_lan_device_wlan_configuration_AssociatedDevice_instance() {
+	local num="$1"
+	local nl="$2"
+	local max_num
+	local dyn_num
+	get_lan_hosts_num "dyn_num" "max_num"
+
+	case "$action" in
+		get_name)
+			while [ $i -le $max_num ];do
+				[ "$nl" = "0" ] && easycwmp_output "InternetGatewayDevice.LANDevice.1.WLANConfiguration.$num.AssociatedDevice.$i." "" "0"
+			done
+			;;
+	esac
+}
+#wanly add end  AssociatedDevice station info
+
+get_wlan_params_all()
+{
+	local nl="$2"
+	local iface
+	local number="1 2"
+
+	for num in $number; do
+		eval "$1" "$num" "$nl"
+	done
+
+}
+
+get_wlan_mult_wepkey_params_var()
+{
+	local nl="$2"
+	local iface
+	local ifaces=`$UCI_SHOW wireless| grep "wireless\.@wifi-iface\[[0-9]\+\]\.instance" | cut -d'.' -f2`
+	local indexnum=4
+	for iface in $ifaces; do
+		local num=`$UCI_GET wireless.$iface.instance`
+		local i=1
+		while [ $i -le $indexnum ]
+		do
+			eval "$1" "$num" "$i" "$nl"
+			let i=$i+1
+		done
+	done
+
+}
+
+get_wlan_mult_psk_params_var()
+{
+	local nl="$2"
+	local iface
+	local ifaces=`$UCI_SHOW wireless| grep "wireless\.@wifi-iface\[[0-9]\+\]\.instance" | cut -d'.' -f2`
+	local indexnum=10
+	for iface in $ifaces; do
+		local num=`$UCI_GET wireless.$iface.instance`
+		local i=1
+		while [ $i -le $indexnum ]
+		do
+			eval "$1" "$num" "$i" "$nl"
+			let i=$i+1
+		done
+	done
+
+}
+
+get_wlan_assciateddevice_max(){
+	local ifdev
+	get_wlan_interface_device "ifdev"
+
+	local max_num=`iw dev $ifdev station dump |grep "Station"|wc -l`
+	local i=1
+	while [ $i -le $max_num ]
+	do
+		get_wlan_associated_device_macaddress "1" "$i"
+		get_wlan_associated_device_ipaddress "1" "$i"
+		get_wlan_associated_device_authentication_state "1" "$i"
+		let i=$i+1
+	done
+}
+
+#values
+#192.168.1.161 28:9a:fa:ce:17:84
+#192.168.1.222 28:9a:fa:ce:17:87
+#192.168.1.223 74:46:a0:a6:a8:22
+
+#ip 192.168.1.161
+#ip 192.168.1.223
+# in pc host info
+get_devices_hosts_info(){
+	local i=1
+	local max_num
+	local dyn_num
+	IPAddress=""
+	get_lan_hosts_num "dyn_num" "max_num"
+	local ipaddr
+
+	while [ $i -le $max_num ]
+	do
+		get_lan_hosts_MACAddress "$i"
+		get_lan_hosts_IPAddress "$i" "ipaddr"
+		get_lan_hosts_AddressSource "$i"
+		get_lan_hosts_LeaseTimeRemaining "$i"
+		get_lan_hosts_HostName "$i"
+		get_lan_hosts_InterfaceType "$i"
+		get_lan_hosts_Active  "$i"
+		IPAddress="$IPAddress $ipaddr"
+		let i=$i+1
+	done
+
+	if [ $dyn_num -eq 0 ];then
+		eth_num=`$UCI_SHOW lanhost|grep "lan"|grep ipaddr|wc -l`
+		while [ $i -le $eth_num ]
+		do
+			get_lan_hosts_MACAddress "$i"
+			get_lan_hosts_IPAddress "$i" "ipaddr"
+			get_lan_hosts_AddressSource "$i"
+			get_lan_hosts_LeaseTimeRemaining "$i"
+			get_lan_hosts_HostName "$i"
+			get_lan_hosts_InterfaceType "$i"
+			get_lan_hosts_Active  "$i"
+			IPAddress="$IPAddress $ipaddr"
+			let i=$i+1
+		done
+	fi
+#	local portnum
+#	local portID1
+#	local portID2
+#	local value
+
+#	case "$action" in
+#		get_value)
+#			get_lan_hosts_wire_portstatus "portnum" "portID1" "portID2"
+#			if [ $portnum -eq 1 ];then
+#				values=`cat /proc/net/arp|grep -v -E usb0\|Device |awk -F " " '{print $1}'|xargs`
+#				for value in $values;do
+#					local temp=`echo $IPAddress|grep "$value"`
+#					#easycwmp_output "temp" "$temp" "1"
+#					if [ -z $temp ];then
+#						local macaddr=`cat /proc/net/arp|grep -v -E usb0\|Device |awk -F " " '{print $1 " " $4}'|grep "$value" |awk -F " " '{ print $2 }'`
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.IPAddress" "$value" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.AddressSource" "static" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.MACAddress" "$macaddr" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.Active" "1" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.HostName" "$portID1" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.LeaseTimeRemaining" "ForeverLease" "1"
+#						break
+#					fi
+#				done
+#
+#			elif [ $portnum -eq 2 ];then
+#				values=`cat /proc/net/arp|grep -v -E usb0\|Device |awk -F " " '{print $1}'`
+#				for value in $values;do
+#					if [ -z $temp ];then
+#						local macaddr=`cat /proc/net/arp|grep -v -E usb0\|Device |awk -F " " '{print $1 " " $4}'|grep "$value" |awk -F " " '{ print $2 }'`
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.IPAddress" "$value" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.AddressSource" "static" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.MACAddress" "$macaddr" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.Active" "1" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.HostName" "$portID1" "1"
+#						easycwmp_output "InternetGatewayDevice.LANDevice.1.Hosts.Host.$i.LeaseTimeRemaining" "ForeverLease" "1"
+#						portID1=$portID2
+#						let i=$i+1
+#					fi
+#				done
+#			fi
+#		;;
+#	esac
+}
+
+# add by Zhao Zijun begin
+get_wlan_wifi_params_all() {
+	get_wlan_params_all "get_wlan_enable" "$1"
+	get_wlan_params_all "get_wlan_ssid_hidden" "$1"
+	get_wlan_params_all "get_wlan_ssid" "$1"
+	get_wlan_params_all "get_wlan_bssid" "$1"
+	get_wlan_params_all "get_wlan_maxbitrate" "$1"
+	get_wlan_params_all "get_wlan_status" "$1"
+	get_wlan_params_all "get_wlan_channel" "$1"
+	get_wlan_params_all "get_wlan_beacon_type" "$1"
+	get_wlan_params_all "get_wlan_standard" "$1"
+	get_wlan_params_all "get_wlan_wepkey_index" "$1"
+	get_wlan_params_all "get_wlan_keypass_phrase" "$1"
+	get_wlan_params_all "get_wlan_basic_encryption_modes" "$1"
+	get_wlan_params_all "get_wlan_basic_authentication_mode" "$1"
+	get_wlan_params_all "get_wlan_wpa_encryption_modes" "$1"
+	get_wlan_params_all "get_wlan_wpa_authentication_mode" "$1"
+	get_wlan_params_all "get_wlan_possible_channels" "$1"
+    get_wlan_params_all "get_wlan_band" "$1"
+	# get_wlan_params_all "get_wlan_macaddr_control_enable" "$1"
+    get_wlan_params_all "get_wlan_possible_transmit_rates" "$1"
+    # get_wlan_params_all "get_wlan_insecure_oob_access_enabled" "$1"
+    get_wlan_params_all "get_wlan_radio_enabled" "$1"
+    get_wlan_params_all "get_wlan_channels_in_use" "$1"
+    get_wlan_params_all "get_wlan_wepkey_object" "$1"
+    get_wlan_params_all "get_wlan_wepkey_instance" "$1"
+    # get_wlan_params_all "get_wlan_psk_object" "$1"
+    # get_wlan_params_all "get_wlan_psk_instance" "$1"
+    get_wlan_params_all "get_wlan_wepkey_key" "$1"
+
+    get_wlan_params_all "get_wlan_totalBytesSent" "$1"
+    get_wlan_params_all "get_wlan_totalBytesReceived" "$1"
+    get_wlan_params_all "get_wlan_totalPacketsSent" "$1"
+    get_wlan_params_all "get_wlan_totalPacketsReceived" "$1"
+}
+
+get_wlan_mult_psk_params()
+{
+	get_wlan_mult_psk_params_var "get_wlan_psk_tables_psk" "$1"
+	get_wlan_mult_psk_params_var "get_wlan_psk_tables_key" "$1"
+}
+# add by Zhao Zijun end
+
+get_lan_device() {
+# easycwmp_output "$1" "dsfffffffffffff" "1"
+case "$1" in
+	InternetGatewayDevice.)
+		get_lan_device_object 0
+		get_lan_device_instance "$2"
+		get_lan_device_wlan_configuration_object "$2"
+
+		get_wlan_configuration_instances "$2"
+		get_wlan_wifi_params_all $2
+		# get_wlan_mult_psk_params "$2"
+        # get_wlan_statistics "$2"
+        get_wlan_assciateddevice_max "$2"
+        get_lan_device_hosts_info_object "$2"
+        get_lan_hosts_HostNumberOfEntries "$2"
+
+        get_devices_hosts_info "$2"
+		get_hostconfigmanage_object "$2"
+        get_hostconfigmanage  "$2"
+
+		get_host_ipinterface_object "$2"
+        get_host_ipinterface_instance  "$2"
+        get_host_ipinterface  "$2"
+
+		get_lanEtherinterface_object "$2"
+        get_lanEtherinterface_instance "$2"
+        get_lanEtherinterface "$2"
+        get_lanEtherinterface_stats_object  "$2"
+        get_lanEtherinterface_stats "$2"
+
+		get_lan_wlan_config_num $2
+		get_lan_eth_config_num $2
+		get_lan_usb_config_num "$2"
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.)
+		get_lan_device_object "$2"
+		get_lan_device_instance 0
+		get_lan_device_wlan_configuration_object "$2"
+
+		get_wlan_configuration_instances "$2"
+		get_wlan_wifi_params_all $2
+		# get_wlan_mult_psk_params "$2"
+        # get_wlan_statistics "$2"
+        get_wlan_assciateddevice_max "$2"
+
+        get_lan_device_hosts_info_object "$2"
+        get_lan_hosts_HostNumberOfEntries "$2"
+        get_devices_hosts_info "$2"
+
+		get_hostconfigmanage_object "$2"
+        get_hostconfigmanage  "$2"
+
+		get_host_ipinterface_object "$2"
+        get_host_ipinterface_instance  "$2"
+        get_host_ipinterface  "$2"
+
+		get_lanEtherinterface_object "$2"
+        get_lanEtherinterface_instance "$2"
+        get_lanEtherinterface "$2"
+        get_lanEtherinterface_stats_object  "$2"
+        get_lanEtherinterface_stats "$2"
+
+		get_lan_wlan_config_num $2
+		get_lan_eth_config_num $2
+		get_lan_usb_config_num "$2"
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.)
+	#	get_lan_device_instance "$2"
+		# fix by Zhao Zijun begin
+		get_lan_device_wlan_configuration_object 0
+        get_lan_device_hosts_info_object 0
+		get_hostconfigmanage_object 0
+		get_wlan_wifi_params_all $2
+		# get_wlan_mult_psk_params "$2"
+		# fix by Zhao Zijun end
+		get_wlan_configuration_instances "$2"
+        # get_lan_device_hosts_info_instance "$2"
+        # get_hostconfigmanage_instance  "$2"
+
+		get_host_ipinterface_object "$2"
+        get_host_ipinterface_instance  "$2"
+        get_host_ipinterface  "$2"
+
+		get_lanEtherinterface_object 0
+        get_lanEtherinterface_instance "$2"
+        get_lanEtherinterface "$2"
+        get_lanEtherinterface_stats_object  "$2"
+        get_lanEtherinterface_stats 0
+
+		get_lan_wlan_config_num 0
+		get_lan_eth_config_num 0
+		get_lan_usb_config_num 0
+		return 0
+		;;
+
+# *************************************************** Get LAN Device Number Start **************************************************
+	# add by Zhao Zijun begin
+	InternetGatewayDevice.LANDevice.1.LANWLANConfigurationNumberOfEntries)
+		get_lan_wlan_config_num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANUSBInterfaceNumberOfEntries)
+		get_lan_usb_config_num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceNumberOfEntries)
+		get_lan_eth_config_num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.)
+		# fix by Zhao Zijun
+        get_hostconfigmanage  0
+		get_host_ipinterface_object 0
+		get_host_ipinterface_instance "$2"
+		get_host_ipinterface "$2"
+		return 0
+		;;
+
+# *************************************************** Get LAN Device Number End**************************************************
+
+# ******************************************* Get LAN Host Configuration Management Start ***************************************
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerConfigurable)
+		get_hostcofigmanage_DHCPServerConfigurable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerEnable)
+		get_hostcofigmanage_enable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers)
+		get_hostcofigmanage_dns_servers "$2"
+		return $?
+		;;
+
+#	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.ReservedAddresses)
+#		get_hostcofigmanage_ReservedAddresses "$2"
+#		return $?
+#		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MinAddress)
+		get_hostcofigmanage_minAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MaxAddress)
+		get_hostcofigmanage_maxAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.SubnetMask)
+		get_hostcofigmanage_subnetMask "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DomainName)
+		get_hostcofigmanage_domainName "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPRouters)
+		get_hostcofigmanage_ip_routers "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPLeaseTime)
+		get_hostcofigmanage_DHCPLeaseTime "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers)
+		get_hostcofigmanage_DNSServers "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterfaceNumberOfEntries)
+		get_hostcofigmanage_ip_interface_num "$2"
+		return $?
+		;;
+
+# ******************************* Get LAN Host Configuration Management Ip Interface Start **************************
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.)
+		get_host_ipinterface_object "$2"
+		get_host_ipinterface_instance 0
+        get_host_ipinterface  "$2"
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.)
+		get_host_ipinterface_instance "$2"
+        get_host_ipinterface  0
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.Enable)
+		get_host_ipinterface_Enable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress)
+		get_host_ipinterface_IPAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask)
+		get_host_ipinterface_SubnetMask "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceAddressingType)
+		get_host_ipinterface_Type "$2"
+		return $?
+		;;
+
+	# add by Zhao Zijun end
+# ******************************* Get LAN Host Configuration Management Ip Interface End **************************
+
+# ******************************************* Get LAN Host Configuration Management End ***************************************
+
+# ******************************************* Get LAN Ethernet Interface Config Start ***************************************
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.)
+		get_lanEtherinterface_object "$2"
+        get_lanEtherinterface_instance 0
+        get_lanEtherinterface "$2"
+        get_lanEtherinterface_stats_object "$2"
+        get_lanEtherinterface_stats "$2"
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.)
+        get_lanEtherinterface_instance "$2"
+        get_lanEtherinterface 0
+        get_lanEtherinterface_stats_object 0
+        get_lanEtherinterface_stats "$2"
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Enable)
+        get_lanEtherinterface_enable $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Status)
+        get_lanEtherinterface_status $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress)
+		get_lanEtherinterface_MACAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MaxBitRate)
+		get_lanEtherinterface_MaxBitRate "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.DuplexMode)
+		get_lanEtherinterface_DuplexMode "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.)
+        get_lanEtherinterface_stats 0
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.BytesSent)
+        get_lanEtherinterface_stats_BytesTx "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.BytesReceived)
+        get_lanEtherinterface_stats_BytesRx "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.PacketsSent)
+        get_lanEtherinterface_stats_PacketsTx "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.PacketsReceived)
+        get_lanEtherinterface_stats_PacketsRx "$2"
+		return $?
+		;;
+
+# ******************************************* Get LAN Ethernet Interface Config END ***************************************
+
+# ******************************************* Get WIFI Configuration Start ***************************************
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.)
+		get_lan_device_wlan_configuration_object "$2"
+		get_wlan_configuration_instances 0
+		get_wlan_wifi_params_all $2
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}."  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+	#	get_lan_device_wlan_configuration_instance "$1" "$2"
+	    get_lan_device_wlan_configuration_AssociatedDevice_object "$__num" 0
+		get_lan_device_wlan_configuration_AssociatedDevice_instance "$__num" $2
+
+		get_wlan_enable "$__num" 0
+		get_wlan_ssid_hidden "$__num" 0
+		get_wlan_ssid "$__num" 0
+		get_wlan_bssid "$__num" 0
+		get_wlan_band "$__num" 0
+        # get_wlan_macaddr_control_enable "$__num" "$uci_iface" 0
+        # get_wlan_insecure_oob_access_enabled "$__num" "$uci_iface" 0
+        get_wlan_radio_enabled "$__num" 0
+        get_wlan_possible_transmit_rates "$__num" 0
+		get_wlan_channels_in_use "$__num" 0
+		get_wlan_maxbitrate "$__num" 0
+		get_wlan_status "$__num" 0
+		get_wlan_channel "$__num" 0
+		get_wlan_beacon_type "$__num" 0
+		get_wlan_wepkey_index "$__num" 0
+		get_wlan_keypass_phrase "$__num" 0
+		get_wlan_basic_encryption_modes "$__num" 0
+		get_wlan_basic_authentication_mode "$__num" 0
+		get_wlan_wpa_encryption_modes "$__num" 0
+		get_wlan_wpa_authentication_mode "$__num" 0
+		get_wlan_possible_channels "$__num" 0
+		get_wlan_wepkey_object "$__num" 0
+		get_wlan_wepkey_instance $__num $2
+		# get_wlan_psk_object "$__num" 0
+		# get_wlan_psk_instance $__num $2
+		get_wlan_totalBytesSent $__num 0
+		get_wlan_totalBytesReceived $__num 0
+		get_wlan_totalPacketsSent $__num 0
+		get_wlan_totalPacketsReceived $__num 0
+		# get_wlan_statistics $2
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Enable)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Enable"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_enable "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BeaconAdvertisementEnabled)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BeaconAdvertisementEnabled"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_ssid_hidden "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].band)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.band"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_band "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PossibleDataTransmitRates)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PossibleDataTransmitRates"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+        get_wlan_possible_transmit_rates "$__num" $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].RadioEnabled)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.RadioEnabled"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+        get_wlan_radio_enabled "$__num" $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].ChannelsInUse)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.ChannelsInUse"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_channels_in_use "$__num" $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].SSID)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.SSID"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_ssid "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].MaxBitRate)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.MaxBitRate"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_maxbitrate  "$__num" $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Status)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Status"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_status $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Standard)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Standard"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_standard $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Channel)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Channel"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_channel  $__num $2
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BSSID)
+	   	easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BSSID"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_wlan_bssid  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BeaconType)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BeaconType"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_beacon_type  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKeyIndex)
+		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKeyIndex"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		 get_wlan_wepkey_index $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKey.)
+		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKey."  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_wepkey_instance $__num $2
+		get_wlan_wepkey_key "$__num" $2
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKey.1.)
+     	easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKey.1."  "rc"  "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_wepkey_key "$__num" 0
+		return 0
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PreSharedKey.)
+		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PreSharedKey."  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_psk_instance $__num 0 0
+		return 0
+		;;
+
+#	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PreSharedKey.[0-9]*.)
+#		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PreSharedKey.{i}."  "rc"  "__num"
+#		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+#		local temp=$__num
+#        local a=`echo ${temp%' '*}`
+#        local b=`echo ${temp#*' '}`
+#		get_wlan_psk_tables_psk "$a" "$b" "0"
+#		get_wlan_psk_tables_key "$a" "$b" "0"
+#		return 0
+#		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKey.1.WEPKey)
+     	easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKey.1.WEPKey"  "rc"  "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_wepkey_key "$__num" "$2"
+		return $?
+		;;
+
+#	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-9].PreSharedKey.[0-9]*.PreSharedKey)
+#		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PreSharedKey.{i}.PreSharedKey"  "rc"  "__num"
+#		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+#		local temp=$__num
+#        local a=`echo ${temp%' '*}`
+#        local b=`echo ${temp#*' '}`
+#		get_wlan_psk_tables_psk "$a" "$b" "$2"
+#		return $?
+#		;;
+#
+#	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-9].PreSharedKey.[0-9]*.KeyPassphrase)
+#		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PreSharedKey.{i}.KeyPassphrase"  "rc"  "__num"
+#		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+#		local temp=$__num
+#        local a=`echo ${temp%' '*}`
+#        local b=`echo ${temp#*' '}`
+#		get_wlan_psk_tables_key "$a" "$b" "$2"
+#		return $?
+#		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].KeyPassphrase)
+		easycwmp_parse_formated_parameter  $1 "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.KeyPassphrase"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_keypass_phrase  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BasicEncryptionModes)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BasicEncryptionModes"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_basic_encryption_modes $__num $2
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BasicAuthenticationMode)
+	  	easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BasicAuthenticationMode"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_wlan_basic_authentication_mode  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WPAEncryptionModes)
+		easycwmp_parse_formated_parameter  $1 "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WPAEncryptionModes"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_wpa_encryption_modes  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WPAAuthenticationMode)
+	  	easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WPAAuthenticationMode"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_wlan_wpa_authentication_mode  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PossibleChannels)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.PossibleChannels"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_wlan_possible_channels  $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.)
+	#   easycwmp_output "$1" "" "1"
+	#	get_lan_device_wlan_configuration_AssociatedDevice_object "$2"
+		get_lan_device_wlan_configuration_AssociatedDevice_instance  0
+	    get_wlan_assciateddevice_max "$2"
+		return 0
+		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.)
+		get_lan_device_wlan_configuration_AssociatedDevice_object "$2"
+		get_lan_device_wlan_configuration_AssociatedDevice_instance 0
+	    get_wlan_assciateddevice_max "$2"
+		return 0
+		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceMACAddress)
+        easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceMACAddress"  "rc"  "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		local temp=$__num
+        local a=`echo ${temp%' '*}`
+        local tempnum=$__num
+        local b=`echo ${tempnum#*' '}`
+        get_wlan_associated_device_macaddress  "$a"  "$b"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceIPAddress)
+     	easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceIPAddress"  "rc"  "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		local temp=$__num
+        local a=`echo ${temp%' '*}`
+        local tempnum=$__num
+        local b=`echo ${tempnum#*' '}`
+        get_wlan_associated_device_ipaddress  "$a"  "$b"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceAuthenticationState)
+	    easycwmp_parse_formated_parameter  $1 "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.AssociatedDevice.{i}.AssociatedDeviceAuthenticationState"  "rc"  "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		local temp=$__num
+	    local a=`echo ${temp%' '*}`
+	    local tempnum=$__num
+	    local b=`echo ${tempnum#*' '}`
+	    get_wlan_associated_device_authentication_state  "$a"  "$b"
+		return $?
+		;;
+
+# ******************************************* Get WIFI Configuration End ***************************************
+
+#################################new add begin
+    InternetGatewayDevice.LANDevice.1.Hosts.)
+	    get_lan_hosts_HostNumberOfEntries "0"
+	    get_lan_device_hosts_info_object "$2"
+	    get_lan_device_host_info_object "0"
+	    get_lan_device_host_info_instance "$1" 0
+	    get_devices_hosts_info "$2"
+		return 0
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.HostNumberOfEntries)
+	    get_lan_hosts_HostNumberOfEntries "$2"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.)
+	    get_lan_device_host_info_object "$2"
+	    get_lan_device_host_info_instance "$1" 0
+	    get_devices_hosts_info "$2"
+		return 0
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.)
+	    get_lan_device_host_info_instance "$1" 0
+	    get_devices_hosts_info "$2"
+	    return 0
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.MACAddress)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.MACAddress"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_lan_hosts_MACAddress "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.IPAddress)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.IPAddress"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_lan_hosts_IPAddress "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.AddressSource)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.AddressSource"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_lan_hosts_AddressSource "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.LeaseTimeRemaining)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.LeaseTimeRemaining"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_lan_hosts_LeaseTimeRemaining "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.HostName)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.HostName"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_lan_hosts_HostName "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.InterfaceType)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.InterfaceType"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		get_lan_hosts_InterfaceType "$__num"
+		return $?
+		;;
+
+    InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.Active)
+		easycwmp_parse_formated_parameter  "$1" "InternetGatewayDevice.LANDevice.1.Hosts.Host.{i}.Active"  "rc"  "__num"
+		[ "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	    get_lan_hosts_Active "$__num"
+		return $?
+		;;
+#############new add end
+esac
+
+
+return $E_INVALID_PARAMETER_NAME
+}
+
+set_lan_device() {
+local __num  rc num uci_iface
+case "$1" in
+	InternetGatewayDevice.LANDevice.|\
+	InternetGatewayDevice.LANDevice.1.|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.|\
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.|\
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.|\
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.)
+		[ "$action" = "set_value" ] && return $E_INVALID_PARAMETER_VALUE
+		set_notification_common_argument "$parm" "$val"
+ 			return $?
+		;;
+
+# *************************************************** Set LAN Device Number Start **************************************************
+	InternetGatewayDevice.LANDevice.1.LANWLANConfigurationNumberOfEntries|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceNumberOfEntries)
+		set_node_readonly_and_reject_notification_info
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANUSBInterfaceNumberOfEntries)
+		set_node_readonly_info "$1" "$2"
+		return $?
+		;;
+
+# *************************************************** Set LAN Device Number End **************************************************
+
+# *************************************************** Set WIFI Configuration Start **************************************************
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].)
+		[ "$action" = "set_value" ] && return $E_INVALID_PARAMETER_VALUE
+		get_wlan_num_and_uci_iface "$1" "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}." "num" "uci_iface"
+		[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+		set_notification_common_argument "$parm" "$val"
+ 			return $?
+		;;
+
+# ********************* Set WIFI Read AND Write Nodes End **********************************************
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Enable)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Enable"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_enable "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BeaconAdvertisementEnabled)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BeaconAdvertisementEnabled"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_ssid_hidden "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].SSID)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.SSID"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_ssid "$__num" "$2"
+		return $?
+		;;
+
+	#add by Zhao Zijun begin
+#	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKeyIndex)
+#		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKeyIndex"  "rc"  "__num"
+#		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+#		[ $2 -ne 1 ] && return $E_INVALID_PARAMETER_VALUE
+#		set_wlan_wepkey_index "$__num" "$2"
+#		return $?
+#		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WPAEncryptionModes)
+		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WPAEncryptionModes"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_wpa_encryption_modes "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BeaconType)
+		easycwmp_parse_formated_parameter "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BeaconType" "rc" "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_beacon_type "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].RadioEnabled)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.RadioEnabled"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_radio_enabled "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Channel)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Channel" "rc" "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	   	set_wlan_channel "$__num" "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Standard)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.Standard" "rc" "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	   	set_wlan_standard "$__num"  "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].KeyPassphrase)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.KeyPassphrase"  "rc" "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	   	set_wlan_keypass_phrase $__num $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BasicEncryptionModes)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.BasicEncryptionModes"  "rc" "__num"
+		[  "$__num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	   	set_wlan_basic_encryption_modes "$__num"  "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKey.1.WEPKey)
+		easycwmp_parse_formated_parameter  "$1"  "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.WEPKey.1.WEPKey"  "rc"  "__num"
+		[ "$rc" != "0" ] && return $E_INVALID_PARAMETER_NAME
+		set_wlan_wepkey_key "$__num" "$2"
+		return $?
+		;;
+# ********************* Set WIFI Read AND Write Nodes End **********************************************
+
+# ********************* Set WIFI ReadOnly Nodes Start **********************************************
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BSSID|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WEPKeyIndex|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PossibleChannels|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].PossibleDataTransmitRates)
+		set_node_readonly_and_reject_notification_info
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].band|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].MaxBitRate|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].Status|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].BasicAuthenticationMode|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].WPAAuthenticationMode|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].ChannelsInUse|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].TotalBytesSent|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].TotalBytesReceived|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].TotalPacketsSent|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].TotalPacketsReceived|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceMACAddress|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceIPAddress|\
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].AssociatedDevice.[1-9]*.AssociatedDeviceAuthenticationState)
+		set_node_readonly_info "$1" "$2"
+		return $?
+		;;
+
+# ********************* Set WIFI ReadOnly Nodes End **********************************************
+
+# *************************************************** Set WIFI Configuration End **************************************************
+
+# ************************************************** Set Lan Host Configuration Start **********************************************
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerConfigurable)
+		set_hostcofigmanage_DHCPServerConfigurable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerEnable)
+		set_hostcofigmanage_enable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers)
+		set_hostcofigmanage_dns_servers "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MinAddress)
+		set_hostcofigmanage_minAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MaxAddress)
+		set_hostcofigmanage_maxAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.SubnetMask)
+		set_hostcofigmanage_subnetMask "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DomainName)
+		set_hostcofigmanage_domainName "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPRouters)
+		set_hostcofigmanage_ip_routers "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPLeaseTime)
+		set_hostcofigmanage_DHCPLeaseTime "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers)
+		set_hostcofigmanage_DNSServers "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.Enable)
+		set_host_ipinterface_Enable "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress)
+		set_host_ipinterface_IPAddress "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask)
+		set_host_ipinterface_SubnetMask "$2"
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceAddressingType)
+		set_node_readonly_and_reject_notification_info
+		return $?
+		;;
+
+# ************************************************** Set Lan Host Configuration End **********************************************
+
+# ******************************************* Set Lan Ethernet Interface Configuration Start *************************************
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Enable)
+		set_lanEtherinterface_enable $2
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MaxBitRate|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.DuplexMode)
+		set_node_readonly_and_reject_notification_info
+		return $?
+		;;
+
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Status|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.BytesSent|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.BytesReceived|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.PacketsSent|\
+	InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.Stats.PacketsReceived)
+		set_node_readonly_info "$1" "$2"
+		return $?
+		;;
+
+# ******************************************* Set Lan Ethernet Interface Configuration End ****************************************
+
+# ******************************************* Set Hosts Configuration Start ****************************************
+	InternetGatewayDevice.LANDevice.1.Hosts.HostNumberOfEntries|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.MACAddress|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.IPAddress|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.AddressSource|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.LeaseTimeRemaining|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.HostName|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.InterfaceType|\
+	InternetGatewayDevice.LANDevice.1.Hosts.Host.[1-9]*.Active)
+		set_node_readonly_info "$1" "$2"
+		return $?
+		;;
+
+esac
+
+return $E_INVALID_PARAMETER_NAME
+}
+
+build_instances_lan_device() {
+	local iface
+	local ifaces=`$UCI_SHOW wireless | grep "wireless\.@wifi-iface\[[0-9]\+\]=wifi-iface" | cut -d'.' -f2 | cut -d'=' -f1`
+	local instance=`get_max_instance`
+	for iface in $ifaces; do
+		if [ "`$UCI_GET wireless.$iface.instance`" = "" ] ; then
+			$UCI_SET wireless.$iface.instance=$((++instance))
+			$UCI_COMMIT wireless
+		fi
+	done
+}
+
+
+add_object_lan_device() {
+case "$1" in
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.)
+	local instance=`add_wlan_iface`
+	easycwmp_set_parameter_notification "$1$instance." "0"
+	easycwmp_status_output "" "" "1" "$instance"
+	return 0
+	;;
+esac
+return $E_INVALID_PARAMETER_NAME
+}
+
+delete_object_lan_device() {
+local num uci_iface
+case "$1" in
+	InternetGatewayDevice.LANDevice.1.WLANConfiguration.[1-2].)
+	get_wlan_num_and_uci_iface "$1" "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}." num uci_iface
+	[ "$uci_iface" = "" -o "$num" = "" ] && return $E_INVALID_PARAMETER_NAME
+	delete_wlan_iface $uci_iface
+	easycwmp_remove_parameter_notification "$1"
+	easycwmp_status_output "" "" "1"
+	return 0
+	;;
+esac
+return $E_INVALID_PARAMETER_NAME
+}
